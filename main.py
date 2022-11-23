@@ -22,33 +22,36 @@ class UserVK:
         url = 'https://api.vk.com/method/photos.get'
         params = {'owner_id': self.id, 'album_id': 'profile', 'extended': '1'}
         response = requests.get(url, params={**self.params, **params})
-        count = response.json()['response']['count']
-        name_info = []
-        json_info = []
-        photo_info = []
-        while count != 0:
-            count -= 1
-            likes = response.json()['response']['items'][count]['likes']['count']
-            photo_name = f'{likes}.jpg'
-            photo_url = response.json()['response']['items'][count]['sizes'][-1]['url']
-            date = response.json()['response']['items'][count]['date']
-            pub_date = datetime.datetime.fromtimestamp(date).strftime('%Y-%m-%d')
-            size = response.json()['response']['items'][count]['sizes'][-1]['type']
-            if len(name_info) == quantity_photo:
-                break
-            else:
-                if photo_name in name_info:
-                    photo_name = f'{likes}({pub_date}).jpg'
-                    name_info.append(photo_name)
-                    json_info.append({"file_name": photo_name, "size": size})
-                    photo_info.append({photo_name: photo_url})
+        if response.status_code != 200:
+            return print(f"Ошибка {response.status_code}! Выполнение невозможно!")
+        else:
+            count = response.json()['response']['count']
+            name_info = []
+            json_info = []
+            photo_info = []
+            while count != 0:
+                count -= 1
+                likes = response.json()['response']['items'][count]['likes']['count']
+                photo_name = f'{likes}.jpg'
+                photo_url = response.json()['response']['items'][count]['sizes'][-1]['url']
+                date = response.json()['response']['items'][count]['date']
+                pub_date = datetime.datetime.fromtimestamp(date).strftime('%Y-%m-%d')
+                size = response.json()['response']['items'][count]['sizes'][-1]['type']
+                if len(name_info) == quantity_photo:
+                    break
                 else:
-                    name_info.append(photo_name)
-                    json_info.append({"file_name": photo_name, "size": size})
-                    photo_info.append({photo_name: photo_url})
-            with open("info.json", 'w') as j_file:
-                j_file.write(json.dumps(json_info))
-        return photo_info
+                    if photo_name in name_info:
+                        photo_name = f'{likes}({pub_date}).jpg'
+                        name_info.append(photo_name)
+                        json_info.append({"file_name": photo_name, "size": size})
+                        photo_info.append({photo_name: photo_url})
+                    else:
+                        name_info.append(photo_name)
+                        json_info.append({"file_name": photo_name, "size": size})
+                        photo_info.append({photo_name: photo_url})
+                with open("info.json", 'w') as j_file:
+                    j_file.write(json.dumps(json_info))
+            return photo_info
 
 
 class YaDiskUser:
@@ -62,17 +65,25 @@ class YaDiskUser:
         url = 'https://cloud-api.yandex.net/v1/disk/resources?'
         path_name = input('Введите название папки: ')
         query = {'path': f'{path_name}'}
-        requests.put(url + urllib.parse.urlencode(query), headers=self.headers)
-        return path_name
+        response = requests.put(url + urllib.parse.urlencode(query), headers=self.headers)
+        if response.status_code == 201:
+            return path_name
+        else:
+            return print(f"Ошибка {response.status_code}! Выполнение невозможно!")
 
     def upload_photo(self, path_name, photo_info):
         url = 'https://cloud-api.yandex.net/v1/disk/resources/upload?'
-        for element in tqdm(photo_info):
+        pbar = tqdm(total=len(photo_info), desc='Загрузка фото',  bar_format='{desc}: {n_fmt}%')
+        for element in photo_info:
             for name in element:
                 photo_name = name
                 photo_url = element[name]
                 query = {'path': f'{path_name}/{photo_name}', 'url': photo_url}
-                requests.post(url + urllib.parse.urlencode(query), headers=self.headers)
+                response = requests.post(url + urllib.parse.urlencode(query), headers=self.headers)
+                if response.status_code == 202:
+                    pbar.update(100 / len(photo_info))
+                else:
+                    print(f'Ошибка {response.status_code}! Фотография {photo_name} не загружена!')
 
 
 def main():
